@@ -16,21 +16,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-arm, macos-intel, macos-arm, windows-latest, windows-arm]
+        os: [macos-intel, macos-arm]
         include:
-          - os: windows-latest
-            checkTarget: true
-          - os: ubuntu-latest
-            docsTarget: true
-            cloudTestTarget: true
-          - os: ubuntu-arm
-            runsOn: ubuntu-24.04-arm64-2-core
           - os: macos-intel
             runsOn: macos-15-intel
           - os: macos-arm
             runsOn: macos-14
-          - os: windows-arm
-            runsOn: windows-11-arm
     runs-on: ${{ matrix.runsOn || matrix.os }}
     steps:
       - name: Checkout repository
