@@ -9,6 +9,7 @@ permissions:
   contents: read
   actions: read
   checks: write
+  pull-requests: write
 
 jobs:
   report:
@@ -16,9 +17,59 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Test Report
+        id: test-report
         uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         with:
           artifact: /test-results-(.*)/
           name: Test Results ($1)
-          path: '**/test-results*.trx'
+          path: '**/*.trx'
           reporter: dotnet-trx
+          # workflow_run runs on the default branch, so without an explicit
+          # commit the check run lands on the wrong SHA and never appears in
+          # the PR. Pin to the SHA of the run that triggered us.
+          commit: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Upsert PR comment with test report link
+        if: ${{ always() && github.event.workflow_run.pull_requests[0].number }}
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        env:
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
+          CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        with:
+          script: |
+            const marker = '<!-- test-report-comment -->';
+            const prNumber = Number(process.env.PR_NUMBER);
+            const runUrl = process.env.RUN_URL;
+            const headSha = process.env.CI_HEAD_SHA;
+            const body = [
+              marker,
+              `### Test report`,
+              ``,
+              `Test results for commit \`${headSha.slice(0, 7)}\`: [view test report run](${runUrl})`,
+              ``,
+              `_The detailed pass/fail breakdown is published as **Test Results (...)** check runs on this PR._`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              per_page: 100,
+            });
+            const existing = comments.find(c => c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }
