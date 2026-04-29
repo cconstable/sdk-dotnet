@@ -20,5 +20,5 @@ jobs:
         with:
           artifact: /test-results-(.*)/
           name: Test Results ($1)
-          path: '**/*.trx'
+          path: '**/test-results*.trx'
           reporter: dotnet-trx
